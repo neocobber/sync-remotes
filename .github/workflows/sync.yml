@@ -100,7 +100,8 @@ jobs:
           export TELDRIVE_DATABASE_URL="postgres://${postgres_user}:${postgres_password}@${DEPLOY_HOST}:6432/postgres"
           echo "::add-mask::$TELDRIVE_DATABASE_URL"
           docker pull ghcr.io/tgdrive/teldrive:v2
-          docker run --detach --rm \
+          docker rm --force teldrive-sync-source >/dev/null 2>&1 || true
+          docker run --detach \
             --name teldrive-sync-source \
             --publish 127.0.0.1:8080:8080 \
             --env TELDRIVE_DATABASE_URL \
@@ -121,7 +122,11 @@ jobs:
             fi
             sleep 2
           done
-          docker logs teldrive-sync-source
+          if docker container inspect teldrive-sync-source >/dev/null 2>&1; then
+            docker logs teldrive-sync-source
+          else
+            echo "TelDrive container was not created" >&2
+          fi
           exit 1
 
       - name: Sync TelDrive to destination
@@ -139,4 +144,4 @@ jobs:
 
       - name: Stop TelDrive
         if: always()
-        run: docker rm --force teldrive-sync-source 2>/dev/null || true
+        run: docker rm --force teldrive-sync-source >/dev/null 2>&1 || true
