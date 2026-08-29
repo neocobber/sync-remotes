@@ -27,7 +27,7 @@ jobs:
     timeout-minutes: 120
     env:
       DEPLOY_HOST: netcup.tail69fe7a.ts.net
-      RCLONE_VERSION: "1.75.1"
+      RCLONE_RELEASE_VERSION: "1.75.1"
       RCLONE_CONFIG_CONTENT: ${{ secrets.RCLONE_CONFIG }}
       RCLONE_CONFIG_TELDRIVE_TYPE: teldrive
       RCLONE_CONFIG_TELDRIVE_API_HOST: http://127.0.0.1:8080
@@ -72,7 +72,7 @@ jobs:
           set -euo pipefail
           archive="$RUNNER_TEMP/rclone.tar.gz"
           install_dir="$RUNNER_TEMP/rclone"
-          url="https://github.com/divyam234/nix-pkgs/releases/download/rclone-v${RCLONE_VERSION}/rclone-v${RCLONE_VERSION}-linux-amd64.tar.gz"
+          url="https://github.com/divyam234/nix-pkgs/releases/download/rclone-v${RCLONE_RELEASE_VERSION}/rclone-v${RCLONE_RELEASE_VERSION}-linux-amd64.tar.gz"
           curl --fail --location --retry 3 --output "$archive" "$url"
           mkdir -p "$install_dir"
           tar --extract --gzip --file "$archive" --directory "$install_dir" --strip-components=1
