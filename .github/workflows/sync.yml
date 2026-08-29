@@ -1,0 +1,145 @@
+name: Sync TelDrive to destination
+
+on:
+  workflow_dispatch:
+    inputs:
+      source_path:
+        description: Path within TelDrive
+        required: false
+        default: ""
+      destination_path:
+        description: Path within the destination remote
+        required: false
+        default: ""
+  schedule:
+    - cron: "0 */3 * * *"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: teldrive-destination-sync
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    env:
+      DEPLOY_HOST: netcup.tail69fe7a.ts.net
+      RCLONE_VERSION: "1.75.1"
+      RCLONE_CONFIG_CONTENT: ${{ secrets.RCLONE_CONFIG }}
+      RCLONE_CONFIG_TELDRIVE_TYPE: teldrive
+      RCLONE_CONFIG_TELDRIVE_API_HOST: http://127.0.0.1:8080
+      RCLONE_CONFIG_TELDRIVE_API_KEY: ${{ secrets.TELDRIVE_API_KEY }}
+      SOURCE_PATH: ${{ inputs.source_path || '' }}
+      DESTINATION_PATH: ${{ inputs.destination_path || '' }}
+
+    steps:
+      - name: Validate required secrets
+        env:
+          POSTGRES_USER: ${{ secrets.POSTGRES_USER }}
+          POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
+          TELDRIVE_SECURITY_SIGNING_KEY: ${{ secrets.TELDRIVE_SECURITY_SIGNING_KEY }}
+          TELDRIVE_SECURITY_DATA_KEY: ${{ secrets.TELDRIVE_SECURITY_DATA_KEY }}
+          TELDRIVE_API_KEY: ${{ secrets.TELDRIVE_API_KEY }}
+          TS_OAUTH_CLIENT_ID: ${{ secrets.TS_OAUTH_CLIENT_ID }}
+          TS_OAUTH_CLIENT_SECRET: ${{ secrets.TS_OAUTH_CLIENT_SECRET }}
+        run: |
+          set -euo pipefail
+          for name in \
+            POSTGRES_USER \
+            POSTGRES_PASSWORD \
+            TELDRIVE_SECURITY_SIGNING_KEY \
+            TELDRIVE_SECURITY_DATA_KEY \
+            TELDRIVE_API_KEY \
+            TS_OAUTH_CLIENT_ID \
+            TS_OAUTH_CLIENT_SECRET \
+            RCLONE_CONFIG_CONTENT; do
+            if [ -z "${!name:-}" ]; then
+              echo "Missing required secret: ${name}" >&2
+              exit 1
+            fi
+          done
+
+      - name: Join tailnet
+        uses: tailscale/github-action@v4
+        with:
+          oauth-client-id: ${{ secrets.TS_OAUTH_CLIENT_ID }}
+          oauth-secret: ${{ secrets.TS_OAUTH_CLIENT_SECRET }}
+          tags: tag:nixos,tag:github-deploy
+          ping: ${{ env.DEPLOY_HOST }}
+
+      - name: Install pinned rclone build
+        run: |
+          set -euo pipefail
+          archive="$RUNNER_TEMP/rclone.tar.gz"
+          install_dir="$RUNNER_TEMP/rclone"
+          url="https://github.com/divyam234/nix-pkgs/releases/download/rclone-v${RCLONE_VERSION}/rclone-v${RCLONE_VERSION}-linux-amd64.tar.gz"
+          curl --fail --location --retry 3 --output "$archive" "$url"
+          mkdir -p "$install_dir"
+          tar --extract --gzip --file "$archive" --directory "$install_dir" --strip-components=1
+          sudo install -m 0755 "$install_dir/rclone" /usr/local/bin/rclone
+          rclone version
+
+      - name: Write destination configuration
+        run: |
+          set -euo pipefail
+          config="$RUNNER_TEMP/rclone.conf"
+          umask 077
+          printf '%s\n' "$RCLONE_CONFIG_CONTENT" > "$config"
+          echo "RCLONE_CONFIG=$config" >> "$GITHUB_ENV"
+
+      - name: Start TelDrive
+        env:
+          POSTGRES_USER: ${{ secrets.POSTGRES_USER }}
+          POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
+          TELDRIVE_SECURITY_SIGNING_KEY: ${{ secrets.TELDRIVE_SECURITY_SIGNING_KEY }}
+          TELDRIVE_SECURITY_DATA_KEY: ${{ secrets.TELDRIVE_SECURITY_DATA_KEY }}
+        run: |
+          set -euo pipefail
+          postgres_user="$(jq -rn --arg value "$POSTGRES_USER" '$value | @uri')"
+          postgres_password="$(jq -rn --arg value "$POSTGRES_PASSWORD" '$value | @uri')"
+          export TELDRIVE_DATABASE_URL="postgres://${postgres_user}:${postgres_password}@${DEPLOY_HOST}:6432/postgres"
+          echo "::add-mask::$TELDRIVE_DATABASE_URL"
+          docker pull ghcr.io/tgdrive/teldrive:v2
+          docker run --detach --rm \
+            --name teldrive-sync-source \
+            --publish 127.0.0.1:8080:8080 \
+            --env TELDRIVE_DATABASE_URL \
+            --env TELDRIVE_SECURITY_SIGNING_KEY \
+            --env TELDRIVE_SECURITY_DATA_KEY \
+            --env TELDRIVE_HTTP_ADDRESS=0.0.0.0:8080 \
+            --env TELDRIVE_JOBS_RUN_WORKERS=false \
+            --env TELDRIVE_TELEGRAM_DOWNLOAD_BOTS=20 \
+            --env TELDRIVE_TELEGRAM_RATE_LIMIT=false \
+            ghcr.io/tgdrive/teldrive:v2
+
+      - name: Wait for TelDrive readiness
+        run: |
+          set -euo pipefail
+          for attempt in $(seq 1 60); do
+            if curl --fail --silent http://127.0.0.1:8080/health/ready >/dev/null; then
+              exit 0
+            fi
+            sleep 2
+          done
+          docker logs teldrive-sync-source
+          exit 1
+
+      - name: Sync TelDrive to destination
+        run: |
+          set -euo pipefail
+          rclone sync \
+            "teldrive:${SOURCE_PATH}" \
+            "destination:${DESTINATION_PATH}" \
+            --config "$RCLONE_CONFIG" \
+            --checkers 8 \
+            --transfers 4 \
+            --stats 30s \
+            --stats-one-line \
+            --log-level INFO
+
+      - name: Stop TelDrive
+        if: always()
+        run: docker rm --force teldrive-sync-source 2>/dev/null || true
