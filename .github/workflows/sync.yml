@@ -116,7 +116,7 @@ jobs:
             --env TELDRIVE_SECURITY_DATA_KEY \
             --env TELDRIVE_HTTP_ADDRESS=0.0.0.0:8080 \
             --env TELDRIVE_JOBS_RUN_WORKERS=false \
-            --env TELDRIVE_TELEGRAM_DOWNLOAD_BOTS=24 \
+            --env TELDRIVE_TELEGRAM_DOWNLOAD_BOTS=28 \
             --env TELDRIVE_TELEGRAM_RATE_LIMIT=false \
             ghcr.io/tgdrive/teldrive:v2
 
@@ -145,7 +145,8 @@ jobs:
             --config "$RCLONE_CONFIG" \
             --checkers 8 \
             --check-first \
-            --transfers 6 \
+            --transfers 7 \
+            --order-by name,asc \
             --quiet
             
       - name: Stop TelDrive
