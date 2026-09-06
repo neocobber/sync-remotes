@@ -118,6 +118,7 @@ jobs:
             --env TELDRIVE_JOBS_RUN_WORKERS=false \
             --env TELDRIVE_TELEGRAM_DOWNLOAD_BOTS=28 \
             --env TELDRIVE_TELEGRAM_DOWNLOAD_READ_PARALLEL=8 \
+            --env TELDRIVE_TELEGRAM_MAX_RETRIES=20 \
             --env TELDRIVE_TELEGRAM_RATE_LIMIT=false \
             ghcr.io/tgdrive/teldrive:v2
 
