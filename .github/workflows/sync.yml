@@ -117,7 +117,6 @@ jobs:
             --env TELDRIVE_HTTP_ADDRESS=0.0.0.0:8080 \
             --env TELDRIVE_JOBS_RUN_WORKERS=false \
             --env TELDRIVE_TELEGRAM_DOWNLOAD_BOTS=28 \
-            --env TELDRIVE_TELEGRAM_DOWNLOAD_READ_PARALLEL=8 \
             --env TELDRIVE_TELEGRAM_MAX_RETRIES=20 \
             --env TELDRIVE_TELEGRAM_RATE_LIMIT=false \
             ghcr.io/tgdrive/teldrive:v2
@@ -147,8 +146,7 @@ jobs:
             --config "$RCLONE_CONFIG" \
             --checkers 8 \
             --check-first \
-            --transfers 4 \
-            --multi-thread-streams 8 \
+            --transfers 7 \
             --order-by name,asc \
             --quiet
             
