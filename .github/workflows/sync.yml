@@ -150,9 +150,7 @@ jobs:
             --transfers 4 \
             --multi-thread-streams 8 \
             --order-by name,asc \
-            --stats 30s \
-            --stats-one-line \
-            --log-level INFO
+            --quiet
             
       - name: Stop TelDrive
         if: always()
