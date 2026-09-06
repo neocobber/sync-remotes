@@ -65,6 +65,8 @@ jobs:
         with:
           oauth-secret: ${{ secrets.TS_OAUTH_CLIENT_SECRET }}
           tags: tag:nixos,tag:github-deploy
+          hostname: github-runner
+          args: --ssh
           ping: ${{ env.DEPLOY_HOST }}
 
       - name: Install pinned rclone build
