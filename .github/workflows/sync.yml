@@ -146,6 +146,7 @@ jobs:
           rclone sync \
             "teldrive:${SOURCE_PATH}" \
             "destination:${DESTINATION_PATH}" \
+            --exclude "/assets/**" \
             --config "$RCLONE_CONFIG" \
             --checkers 8 \
             --check-first \
